@@ -13,6 +13,7 @@
             - Routes live in the URL hash: #/ (home), #/list/<list id>/<page>, #/list/dex/<page> (every Pokémon, fetched one page at a time), #/list/raids*/<page> and #/raid/<boss> (current raid bosses with counters), #/search/<words>/<area>/<page>, #/mon/<name>, #/data, #/settings.
             - The script has three blocks: Settings, Helpers, then the Hub (data, search, views, router).
             - PvE attack, PvE defence and PvP lists are worked out from the Pokédex (the caught Pokémon first). Entries a person adds or imports are saved in the browser only.
+            - Settings holds the sprite style: the general styles, then one per game (GAME_SPRITES, grouped by generation, Colosseum and XD included). A game only has the Pokémon of its time, so newer ones fall through to the next style.
             - Predefined listing pages are the PLPS array. Add one object there and it appears in the navigation and on the home page.
         -->
 
@@ -414,6 +415,11 @@ dialog { overscroll-behavior: contain; }
 .setopt__thumb img.is-pixel { image-rendering: pixelated; }
 .setopt__text { display: grid; gap: 0.125rem; min-inline-size: 0; }
 .setopt__text strong { font-weight: 700; }
+.setgens { display: grid; gap: var(--s-2); }
+.setgen { background: var(--surface); border: var(--rule) solid var(--line-soft); border-radius: var(--r-3); }
+.setgen > summary { display: flex; align-items: center; min-block-size: var(--target); padding: var(--s-2) var(--s-3); font-weight: 700; cursor: pointer; }
+.setgen[open] > summary { border-block-end: var(--rule) solid var(--line-soft); }
+.setgen > .setlist { padding: var(--s-2); }
 @media (width < 56rem) { .tabs li:last-child:nth-child(3n + 1) { grid-column: 1 / -1; } } /* 3n: pills per row. A lone last pill takes the full row. */
 .check { display: flex; align-items: center; gap: var(--s-3); min-block-size: var(--target); font-weight: 700; cursor: pointer; }
 .check input { inline-size: 1.5rem; block-size: 1.5rem; flex: none; accent-color: var(--action); }
@@ -880,6 +886,7 @@ const STORE_SPRITES = 'pgh-sprites-v2'; // Storage key for the cached sprites of
 const SPRITE_URL = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/'; // Default-form sprites, by Pokédex number.
 const SPRITE_ANIM_ALT_URL = 'https://play.pokemonshowdown.com/sprites/ani/'; // Generation 6 onwards animated sprites, tried first for every Pokémon. The gen 5 folder below is the fallback.
 const SPRITE_ANIM_URL = 'https://play.pokemonshowdown.com/sprites/gen5ani/'; // Animated sprites, by name. Tried first; the static sprite is the fallback.
+const ANIM_FOLDERS = { animated: [SPRITE_ANIM_ALT_URL, SPRITE_ANIM_URL], ani6: [SPRITE_ANIM_ALT_URL], ani5: [SPRITE_ANIM_URL] }; // Animated style ids and the Pokémon Showdown folders each one tries, in order.
 const ROCKET_LOGO = 'https://upload.wikimedia.org/wikipedia/commons/7/71/Team_Rocket_Logo.svg'; // Shown on the Giovanni section of the home page.
 const SPRITE_ROTATE_MS = 60000; // The home page sprite changes this often.
 const SPRITE_MAX_BYTES = 51200; // Largest sprite file that is cached (50 KB).
@@ -921,22 +928,143 @@ const SPRITE_TAP_MS = 400; // Presses of the home sprite closer together than th
 const SLOW_LINK = /^(slow-)?2g$/; // Connection types treated as slow.
 const SAMPLE_ID = 25; // Pokédex number of the Pokémon shown as a preview beside each sprite style.
 const SAMPLE_NAME = 'pikachu'; // The same Pokémon by name, for the animated folder.
+const VERSION_URL = SPRITE_URL + 'versions/'; // PokéAPI's sprites from each game: <generation>/<game>/<number>.png.
+const ARCHIVE_URL = 'https://archives.bulbagarden.net/media/upload/'; // Bulbagarden Archives files, stored as <first digit of the file name's MD5>/<first two digits>/<file name>.
+const ARCHIVE_DIGITS_DEX = 3; // Digits in the Pokédex number of Colosseum, XD, Sword and Shield, Brilliant Diamond and Legends: Arceus files.
+const ARCHIVE_DIGITS_NEW = 4; // Digits in the Pokédex number of Scarlet and Violet and Legends: Z-A files.
+const GAME_FALLBACK = ['home', 'art', 'pixel']; // Styles tried after a game's own sprites, for Pokémon and forms the game does not have.
+const MD5_BLOCK = 64; // Bytes in one MD5 block.
+const MD5_PAD_AT = 56; // Length, in bytes, a padded MD5 message has inside its last block, before the 8 length bytes.
+const MD5_WORD = 4; // Bytes in an MD5 word.
+const MD5_WORDS = 16; // Words in one MD5 block.
+const MD5_STEPS = 64; // Steps in one MD5 block.
+const BYTE_MASK = 255; // Largest value of one byte.
+const BITS_PER_BYTE = 8; // Bits in a byte.
+const WORD_BITS = 32; // Bits in an MD5 word.
+const HEX_RADIX = 16; // Base of hexadecimal numbers.
+const MD5_SHIFTS = [7, 12, 17, 22, 5, 9, 14, 20, 4, 11, 16, 23, 6, 10, 15, 21]; // Left rotation in each MD5 round: four values, repeated, for each group of sixteen steps.
+const HUNDREDTHS = 100; // Multiplier that rounds a matchup to two decimal places.
+const HASH_PREFIX = '#/'; // How every page address in the hash starts.
+const MD5_BASE = 2; // Base of the powers of two used by MD5.
+const MD5_LENGTH_BYTES = 8; // Bytes holding the message length at the end of a padded MD5 message.
+const MD5_ROUND_H = 2; // The index of the MD5 round that uses the XOR function.
+const MD5_G_MUL = [1, 5, 3, 7]; // Per round, the factor in the word index: (factor * step + offset) mod 16.
+const MD5_G_ADD = [0, 1, 5, 0]; // Per round, the offset in the word index.
+const ARCHIVE_DIR_DIGITS = 2; // Hex digits of the MD5 used for the second Archives folder.
+const DEX_GEN = { g1: 151, g2: 251, g3: 386, g4: 493, g5: 649, g6: 721, g7: 807, g8: 898, g8la: 905, g9: 1025 }; // The highest Pokédex number of each generation, and of Legends: Arceus.
+const GAME_SPRITES = [
+  game('g1rb', 'Generation 1', 'Red / Blue', DEX_GEN.g1, versionFiles('generation-i/red-blue/'), { px: true, data: true }),
+  game('g1y', 'Generation 1', 'Yellow', DEX_GEN.g1, versionFiles('generation-i/yellow/'), { px: true, data: true }),
+  game('g2g', 'Generation 2', 'Gold', DEX_GEN.g2, versionFiles('generation-ii/gold/'), { px: true, data: true }),
+  game('g2s', 'Generation 2', 'Silver', DEX_GEN.g2, versionFiles('generation-ii/silver/'), { px: true, data: true }),
+  game('g2c', 'Generation 2', 'Crystal', DEX_GEN.g2, versionFiles('generation-ii/crystal/'), { px: true, data: true }),
+  game('g2ca', 'Generation 2', 'Crystal (animated)', DEX_GEN.g2, versionFiles('generation-ii/crystal/animated/', '.gif'), { px: true, motion: true }, 'The animated front sprites from Pokémon Crystal, from PokéAPI. Skipped when your device asks for reduced motion. Pokémon this game does not have, and other forms, use the next style.'),
+  game('g3rs', 'Generation 3', 'Ruby / Sapphire', DEX_GEN.g3, versionFiles('generation-iii/ruby-sapphire/'), { px: true, data: true }),
+  game('g3e', 'Generation 3', 'Emerald', DEX_GEN.g3, versionFiles('generation-iii/emerald/'), { px: true, data: true }),
+  game('g3frlg', 'Generation 3', 'FireRed / LeafGreen', DEX_GEN.g3, versionFiles('generation-iii/firered-leafgreen/'), { px: true, data: true }),
+  game('g3colo', 'Generation 3', 'Colosseum', DEX_GEN.g3, archiveFiles('Box_Colo_', ARCHIVE_DIGITS_DEX), { px: true }, 'The box sprites from Pokémon Colosseum, from the Bulbagarden Archives. Regular forms only.'),
+  game('g3xd', 'Generation 3', 'XD: Gale of Darkness', DEX_GEN.g3, archiveFiles('Box_XD_', ARCHIVE_DIGITS_DEX), { px: true, motion: true }, 'The animated box sprites from Pokémon XD: Gale of Darkness, from the Bulbagarden Archives. Skipped when your device asks for reduced motion. Regular forms only.'),
+  game('g4dp', 'Generation 4', 'Diamond / Pearl', DEX_GEN.g4, versionFiles('generation-iv/diamond-pearl/'), { px: true, data: true }),
+  game('g4pt', 'Generation 4', 'Platinum', DEX_GEN.g4, versionFiles('generation-iv/platinum/'), { px: true, data: true }),
+  game('g4hgss', 'Generation 4', 'HeartGold / SoulSilver', DEX_GEN.g4, versionFiles('generation-iv/heartgold-soulsilver/'), { px: true, data: true }),
+  game('g5bw', 'Generation 5', 'Black / White', DEX_GEN.g5, versionFiles('generation-v/black-white/'), { px: true, data: true }),
+  game('g5bwa', 'Generation 5', 'Black / White (animated)', DEX_GEN.g5, versionFiles('generation-v/black-white/animated/', '.gif'), { px: true, motion: true }),
+  game('g6xy', 'Generation 6', 'X / Y', DEX_GEN.g6, versionFiles('generation-vi/x-y/')),
+  game('g6oras', 'Generation 6', 'Omega Ruby / Alpha Sapphire', DEX_GEN.g6, versionFiles('generation-vi/omegaruby-alphasapphire/')),
+  game('g7usum', 'Generation 7', 'Ultra Sun / Ultra Moon', DEX_GEN.g7, versionFiles('generation-vii/ultra-sun-ultra-moon/')),
+  game('g8swsh', 'Generation 8', 'Sword / Shield', DEX_GEN.g8, archiveFiles('', ARCHIVE_DIGITS_DEX, 'MS8.png')),
+  game('g8bdsp', 'Generation 8', 'Brilliant Diamond / Shining Pearl', DEX_GEN.g4, archiveFiles('Menu_BDSP_', ARCHIVE_DIGITS_DEX)),
+  game('g8la', 'Generation 8', 'Legends: Arceus', DEX_GEN.g8la, archiveFiles('Menu_LA_', ARCHIVE_DIGITS_DEX)),
+  game('g9sv', 'Generation 9', 'Scarlet / Violet', DEX_GEN.g9, archiveFiles('Menu_SV_', ARCHIVE_DIGITS_NEW)),
+  game('g9za', 'Generation 9', 'Legends: Z-A', DEX_GEN.g9, archiveFiles('Menu_ZA_', ARCHIVE_DIGITS_NEW)),
+]; // Sprites from each game, grouped by generation in Settings. max is the highest Pokédex number the game has; px is pixel art; data means a small file that is kept in the browser; motion means it moves.
+const GAME_SET = new Map(GAME_SPRITES.map((g) => [g.kind, g])); // Game styles by id.
 const SPRITE_SETS = [
-  { id: 'auto', label: 'Automatic', kind: '', hint: 'Animated sprites, or small pixel sprites when your device asks for less motion or less data. Shadow Pokémon on the home page keep their Pokémon GO icon.' },
+  { id: 'auto', label: 'Automatic', kind: '', hint: 'A random animated version of each Pokémon, chosen again each time it is shown, from every animated style that has one. Small pixel sprites when your device asks for less motion or less data. Shadow Pokémon on the home page keep their Pokémon GO icon.' },
   { id: 'animated', label: 'Animated sprites', kind: 'animated', hint: 'Moving sprites. Skipped when your device asks for reduced motion.' },
+  { id: 'ani6', label: 'Animated, Generation 6 onwards', kind: 'ani6', hint: 'Moving sprites from Pokémon Showdown, Generation 6 onwards only. Pokémon without one use a pixel sprite. Skipped when your device asks for reduced motion.' },
+  { id: 'ani5', label: 'Animated, Generation 5', kind: 'ani5', hint: 'Moving Generation 5 style sprites from Pokémon Showdown. Pokémon without one use a pixel sprite. Skipped when your device asks for reduced motion.' },
   { id: 'go', label: 'Pokémon GO 3D icons', kind: 'go', hint: 'The icons used in the game. Regular forms only; other forms use the next style.' },
   { id: 'art', label: 'Official artwork', kind: 'art', hint: 'Large, smooth artwork. Uses more data.' },
   { id: 'home', label: 'Pokémon HOME 3D renders', kind: 'home', hint: 'Smooth 3D renders of every form. Uses more data.' },
   { id: 'pixel', label: 'Classic pixel sprites', kind: 'pixel', hint: 'Small and quick to load. Works on every connection.' },
-]; // Sprite styles people can choose in Settings.
+  ...GAME_SPRITES,
+]; // Sprite styles people can choose in Settings: the general ones, then one per game.
 const SPRITE_CHAINS = {
   animated: ['animated', 'pixel'],
+  ani6: ['ani6', 'pixel'],
+  ani5: ['ani5', 'pixel'],
   go: ['go', 'home', 'art', 'pixel'],
   art: ['art', 'home', 'go', 'pixel'],
   home: ['home', 'art', 'go', 'pixel'],
   pixel: ['pixel'],
 }; // Styles tried in turn for each choice: the choice first, then its nearest looks, always ending at the pixel sprite, which every Pokémon has.
-const PIXEL_SRC = /^data:(?!image\/webp)|\.gif$|\/sprites\/pokemon\/\d+\.png$/i; // Addresses of pixel art, which is drawn without smoothing. WebP data pictures are the 3D model sprites, which are smooth.
+const PIXEL_SRC = /^data:(?!image\/webp)|\.gif$|\/sprites\/pokemon\/\d+\.png$|\/versions\/generation-(?:i{1,3}|iv|v)\/|\/Box_(?:XD|Colo)_/i; // Addresses of pixel art, which is drawn without smoothing. WebP data pictures are the 3D model sprites, which are smooth.
+
+/**
+ * One style for a game's sprites.
+ * @param {string} id The style id, also its kind.
+ * @param {string} group The generation it is listed under.
+ * @param {string} label The game's name.
+ * @param {number} max The highest Pokédex number the game has.
+ * @param {function(number): string} url The picture address for a Pokédex number.
+ * @param {{px?: boolean, data?: boolean, motion?: boolean}} [flags] Pixel art, keep as data, moves.
+ * @param {string} [hint] Text for Settings.
+ * @returns {object} The style.
+ */
+function game(id, group, label, max, url, flags, hint) {
+  return { id, kind: id, group, label, max, url, px: false, data: false, motion: false, hint: hint || 'The sprites from Pokémon ' + label + '. Pokémon this game does not have, and other forms, use the next style.', ...flags };
+}
+/**
+ * Address builder for PokéAPI's per-game sprites.
+ * @param {string} path The folder under versions/, ending in a slash.
+ * @param {string} [ext] The file ending.
+ * @returns {function(number): string} Pokédex number to address.
+ */
+function versionFiles(path, ext = '.png') { return (n) => VERSION_URL + path + n + ext; }
+/**
+ * Address builder for Bulbagarden Archives sprites named <prefix><zero-padded number><suffix>.
+ * @param {string} prefix The start of the file name.
+ * @param {number} digits Digits in the number part.
+ * @param {string} [suffix] The file ending.
+ * @returns {function(number): string} Pokédex number to address.
+ */
+function archiveFiles(prefix, digits, suffix = '.png') {
+  return (n) => { const file = prefix + String(n).padStart(digits, '0') + suffix; return ARCHIVE_URL + archiveDir(file) + '/' + file; };
+}
+/**
+ * The two folders a Bulbagarden Archives file sits in: the first hex digit of the MD5 of its name, then the first two. Needed because the Archives serve files from those folders, not from the page address.
+ * @param {string} file The file name, with underscores.
+ * @returns {string} For example "2/21".
+ */
+function archiveDir(file) {
+  const k = Array.from({ length: MD5_STEPS }, (_, i) => Math.floor(Math.abs(Math.sin(i + 1)) * MD5_BASE ** WORD_BITS));
+  const bytes = Array.from(file, (c) => c.charCodeAt(0) & BYTE_MASK), bits = bytes.length * BITS_PER_BYTE;
+  bytes.push(MD5_BASE ** (BITS_PER_BYTE - 1));
+  while (bytes.length % MD5_BLOCK !== MD5_PAD_AT) { bytes.push(0); }
+  for (let i = 0; i < MD5_LENGTH_BYTES; i++) { bytes.push(i < MD5_WORD ? (bits >>> (BITS_PER_BYTE * i)) & BYTE_MASK : 0); }
+  let a0 = 0x67452301, b0 = 0xefcdab89 | 0, c0 = 0x98badcfe | 0, d0 = 0x10325476;
+  for (let off = 0; off < bytes.length; off += MD5_BLOCK) {
+    const w = Array.from({ length: MD5_WORDS }, (_, i) => { const o = off + MD5_WORD * i; let v = 0; for (let j = 0; j < MD5_WORD; j++) { v |= bytes[o + j] << (BITS_PER_BYTE * j); } return v; });
+    let a = a0, b = b0, c = c0, d = d0;
+    for (let i = 0; i < MD5_STEPS; i++) {
+      const round = Math.floor(i / MD5_WORDS);
+      let f, g;
+      if (round === 0) { f = (b & c) | (~b & d); g = i; }
+      else if (round === 1) { f = (d & b) | (~d & c); }
+      else if (round === MD5_ROUND_H) { f = b ^ c ^ d; }
+      else { f = c ^ (b | ~d); }
+      if (round > 0) { g = (MD5_G_MUL[round] * i + MD5_G_ADD[round]) % MD5_WORDS; }
+      const s = MD5_SHIFTS[round * MD5_WORD + (i % MD5_WORD)];
+      f = (f + a + k[i] + w[g]) | 0;
+      a = d; d = c; c = b;
+      b = (b + ((f << s) | (f >>> (WORD_BITS - s)))) | 0;
+    }
+    a0 = (a0 + a) | 0; b0 = (b0 + b) | 0; c0 = (c0 + c) | 0; d0 = (d0 + d) | 0;
+  }
+  const two = (a0 & BYTE_MASK).toString(HEX_RADIX).padStart(ARCHIVE_DIR_DIGITS, '0');
+  return two[0] + '/' + two;
+}
 
 /* ---------- Helpers ---------- */
 /**
@@ -1488,7 +1616,7 @@ let homeRaids = [], homeGiovanni = null;
  * @returns {string[]} Style names.
  */
 function raidChain() {
-  const rest = spriteChain().filter((k) => k !== 'animated');
+  const rest = spriteChain().filter((k) => !ANIM_FOLDERS[k]);
   return reducedMotion() || (spriteSet === 'auto' && lowData()) ? rest : [RAID_KIND].concat(rest);
 }
 /**
@@ -1529,6 +1657,8 @@ async function raidOfKind(kind, b, row, part, base) {
     }
     return '';
   }
+  const g = GAME_SET.get(kind);
+  if (g) { return part ? '' : gameSprite(g, b.id); }
   if (kind === 'go') { const u = part ? '' : GO_ICON_URL + String(b.id).padStart(ICON_ID_DIGITS, '0') + '_00.png'; return u && await loadable(u) ? u : ''; }
   if (kind === 'art' || kind === 'home') {
     const u = !part ? (kind === 'art' ? ART_URL : HOME_URL) + b.id + '.png' : row ? await otherSprite(slug(row.name), part, kind === 'art' ? 'official-artwork' : 'home') : '';
@@ -1669,16 +1799,22 @@ function viewMissing() {
   };
 }
 /**
- * The Settings page. Only the sprite style so far; more panels go below it.
+ * The Settings page. Only the sprite style so far, general styles and one per game; more panels go below it.
  * @returns {object} The view.
  */
 function viewSettings() {
   const low = lowData(), calm = reducedMotion(), samples = {
-    animated: [SPRITE_ANIM_ALT_URL + SAMPLE_NAME + '.gif', true], go: [GO_ICON_URL + String(SAMPLE_ID).padStart(ICON_ID_DIGITS, '0') + '_00.png', false],
+    animated: [SPRITE_ANIM_ALT_URL + SAMPLE_NAME + '.gif', true], ani6: [SPRITE_ANIM_ALT_URL + SAMPLE_NAME + '.gif', true], ani5: [SPRITE_ANIM_URL + SAMPLE_NAME + '.gif', true], go: [GO_ICON_URL + String(SAMPLE_ID).padStart(ICON_ID_DIGITS, '0') + '_00.png', false],
     art: [ART_URL + SAMPLE_ID + '.png', false], home: [HOME_URL + SAMPLE_ID + '.png', false], pixel: [SPRITE_URL + SAMPLE_ID + '.png', true],
   };
-  const thumb = (s) => { const x = samples[s.kind]; return !low && x && !(calm && s.kind === 'animated') ? '<img src="' + x[0] + '" width="48" height="48" alt="" loading="lazy"' + (x[1] ? ' class="is-pixel"' : '') + '>' : ''; };
-  const opts = SPRITE_SETS.map((s) => '<li><label class="setopt"><input type="radio" name="sprite-set" value="' + s.id + '" data-spriteset aria-describedby="so-' + s.id + '"' + (s.id === spriteSet ? ' checked' : '') + '><span class="setopt__thumb" aria-hidden="true">' + thumb(s) + '</span><span class="setopt__text"><strong>' + esc(s.label) + '</strong><span class="hint" id="so-' + s.id + '">' + esc(s.hint) + '</span></span></label></li>').join('');
+  const sample = (s) => (s.url ? [s.url(SAMPLE_ID), s.px] : samples[s.kind]), moving = (s) => !!ANIM_FOLDERS[s.kind] || s.motion;
+  const thumb = (s) => { const x = sample(s); return !low && x && !(calm && moving(s)) ? '<img src="' + x[0] + '" width="48" height="48" alt="" loading="lazy"' + (x[1] ? ' class="is-pixel"' : '') + '>' : ''; };
+  const opt = (s) => '<li><label class="setopt"><input type="radio" name="sprite-set" value="' + s.id + '" data-spriteset aria-describedby="so-' + s.id + '"' + (s.id === spriteSet ? ' checked' : '') + '><span class="setopt__thumb" aria-hidden="true">' + thumb(s) + '</span><span class="setopt__text"><strong>' + esc(s.label) + '</strong><span class="hint" id="so-' + s.id + '">' + esc(s.hint) + '</span></span></label></li>';
+  const general = SPRITE_SETS.filter((s) => !s.group).map(opt).join('');
+  const gens = [...new Set(GAME_SPRITES.map((g) => g.group))].map((name) => {
+    const items = GAME_SPRITES.filter((g) => g.group === name);
+    return '<details class="setgen"' + (items.some((g) => g.id === spriteSet) ? ' open' : '') + '><summary>' + esc(name) + '</summary><ul class="setlist">' + items.map(opt).join('') + '</ul></details>';
+  }).join('');
   const notes = (low ? '<p class="note"><span>Your device asks for less data, so Automatic uses small pixel sprites and these previews are off. A style you pick yourself is used as chosen.</span></p>' : '')
     + (calm ? '<p class="note"><span>Your device asks for less motion, so animated sprites are never shown.</span></p>' : '');
   return {
@@ -1686,7 +1822,9 @@ function viewSettings() {
     html: '<section class="panel stack"><h2 id="h-view">Settings</h2><p>Your choices are saved in this browser only.</p><p id="set-status" role="status" tabindex="-1"></p></section>'
       + '<section class="panel stack" aria-labelledby="sprites-h"><h2 id="sprites-h">Pokémon pictures</h2>'
       + '<p>The style of picture used on the home page. If a style has no picture for a Pokémon or form, or its host cannot be reached, the next nearest style is tried, ending with the classic pixel sprite.</p><p>Raid bosses on the home page always use Generation 6 animated sprites, whatever style you pick. Your device can turn this off if it asks for less motion or less data.</p>' + notes
-      + '<fieldset class="stack"><legend>Sprite style</legend><ul class="setlist">' + opts + '</ul></fieldset></section>',
+      + '<fieldset class="stack"><legend>Sprite style</legend><ul class="setlist">' + general + '</ul>'
+      + '<p class="hint" id="gen-h">Or use the sprites from one game, listed by generation. A game only has the Pokémon of its time, so newer Pokémon and other forms use Pokémon HOME renders, then the classic pixel sprite. Colosseum and XD: Gale of Darkness use their box sprites.</p>'
+      + '<div class="setgens">' + gens + '</div></fieldset></section>',
     after: wireSettings,
   };
 }
@@ -1708,7 +1846,7 @@ function chooseSpriteSet(id) {
   hostStat.clear();
   resetSprites();
   const status = $('set-status');
-  if (status) { say(status, 'Sprite style: ' + s.label + '.'); }
+  if (status) { say(status, 'Sprite style: ' + (s.group ? s.group + ', ' : '') + s.label + '.'); }
 }
 /**
  * The Manage data page: add an entry, export, import and remove.
@@ -1997,8 +2135,8 @@ const smoothSprite = (src) => !PIXEL_SRC.test(src);
  */
 function spriteChain() {
   const set = SPRITE_SETS.find((x) => x.id === spriteSet) || SPRITE_SETS[0];
-  const chain = set.id === 'auto' ? (lowData() ? ['pixel'] : SPRITE_CHAINS.animated) : SPRITE_CHAINS[set.kind];
-  return reducedMotion() ? chain.filter((k) => k !== 'animated') : chain;
+  const chain = set.id === 'auto' ? (lowData() ? ['pixel'] : SPRITE_CHAINS.animated) : (SPRITE_CHAINS[set.kind] || [set.kind].concat(GAME_FALLBACK));
+  return reducedMotion() ? chain.filter((k) => !ANIM_FOLDERS[k] && !(GAME_SET.get(k) || {}).motion) : chain;
 }
 /**
  * The cached sprites by Pokémon key. Anything that is not a safe image value is dropped when read, and so is a cache made for another sprite style or device setting.
@@ -2022,7 +2160,7 @@ function saveSprites() { spriteMap(); store.set(STORE_SPRITES, spriteMem); store
  * Forget every cached sprite, after the style changes. Requests still running for the old style are not saved.
  * @returns {void}
  */
-function resetSprites() { spriteGen++; spriteMem = null; spriteReq.clear(); spriteLast = ''; store.set(STORE_SPRITES, {}); }
+function resetSprites() { spriteGen++; variantReq.clear(); variantDone.clear(); spriteMem = null; spriteReq.clear(); spriteLast = ''; store.set(STORE_SPRITES, {}); }
 /**
  * Where a Pokémon's sprite lives. Forms look their own sprite up in PokéAPI and fall back to the default-form sprite.
  * @param {{id: number, name: string, form: string, key: string}} m The roster row.
@@ -2064,13 +2202,26 @@ function animatedUrl(m, base) {
   return base + fold(m.name.replace(/\s*\(.*\)\s*$/, '')).replace(/ /g, '') + (isDefault(m) ? '' : '-' + part.replace(/-/g, '')) + '.gif';
 }
 /**
+ * A game's sprite for a Pokémon, if the game has it and the picture loads.
+ * @param {{url: function(number): string, max: number}} g The game style.
+ * @param {number} id The Pokédex number.
+ * @returns {Promise<string>} The picture address, or an empty string.
+ */
+async function gameSprite(g, id) {
+  if (!id || id > g.max) { return ''; }
+  const u = g.url(id);
+  return await loadable(u) ? u : '';
+}
+/**
  * One style of picture for a Pokémon form.
  * @param {string} kind The style: animated, go, art, home or pixel.
  * @param {{id: number, name: string, form: string, key: string}} m The roster row.
  * @returns {Promise<string>} A picture address that loads (the pixel style is not checked), or an empty string if this style has none for the form.
  */
 async function spriteOfKind(kind, m) {
-  if (kind === 'animated') { for (const f of [SPRITE_ANIM_ALT_URL, SPRITE_ANIM_URL]) { const u = animatedUrl(m, f); if (await loadable(u)) { return u; } } return ''; }
+  const g = GAME_SET.get(kind);
+  if (g) { return isDefault(m) ? gameSprite(g, m.id) : ''; }
+  if (ANIM_FOLDERS[kind]) { for (const f of ANIM_FOLDERS[kind]) { const u = animatedUrl(m, f); if (await loadable(u)) { return u; } } return ''; }
   if (kind === 'go') { const u = shadowIcon(m); return u && await loadable(u) ? u : ''; }
   if (kind === 'pixel') { return spriteUrlFor(m); }
   const dir = kind === 'art' ? ART_URL : HOME_URL, key = kind === 'art' ? 'official-artwork' : 'home';
@@ -2102,9 +2253,43 @@ async function otherSprite(base, part, key) {
 async function resolveSprite(m) {
   for (const kind of spriteChain()) {
     const u = await spriteOfKind(kind, m);
-    if (u) { return kind === 'pixel' ? imageToData(u).catch(() => u) : u; }
+    if (u) { return kind === 'pixel' || (GAME_SET.get(kind) || {}).data ? imageToData(u).catch(() => u) : u; }
   }
   return '';
+}
+const AUTO_VARIANTS = ['ani6', 'ani5', 'g2ca', 'g3xd', 'g5bwa']; // The animated styles Automatic picks between for each Pokémon, whichever ones have a picture for it.
+const variantReq = new Map(), variantDone = new Map(); // Animated pictures found per Pokémon key: the running lookups, and the finished lists.
+/**
+ * Whether Automatic is on and the device allows motion and data, so a random animated version may be shown.
+ * @returns {boolean} True if so.
+ */
+function autoMotion() { return spriteSet === 'auto' && !reducedMotion() && !lowData(); }
+/**
+ * Every animated picture that exists for a Pokémon form, one per available style. Looked up once per Pokémon and kept for the visit.
+ * @param {{id: number, name: string, form: string, key: string}} m The roster row.
+ * @returns {Promise<string[]>} Picture addresses, possibly none.
+ */
+function autoVariants(m) {
+  if (!variantReq.has(m.key)) {
+    const gen = spriteGen;
+    variantReq.set(m.key, Promise.all(AUTO_VARIANTS.map((k) => spriteOfKind(k, m).catch(() => ''))).then((a) => {
+      const list = [...new Set(a.filter(Boolean))];
+      if (gen === spriteGen) { variantDone.set(m.key, list); }
+      return list;
+    }));
+  }
+  return variantReq.get(m.key);
+}
+/**
+ * With Automatic, a random one of the animated versions that exist for this Pokémon, chosen again each time it is shown. Otherwise, or when there are none, the picture given.
+ * @param {{id: number, name: string, form: string, key: string}} m The roster row.
+ * @param {string} fallback The picture to use when no animated version applies.
+ * @returns {Promise<string>} A picture address.
+ */
+async function autoSprite(m, fallback) {
+  if (!autoMotion()) { return fallback; }
+  const list = await autoVariants(m).catch(() => []);
+  return list.length ? list[Math.floor(Math.random() * list.length)] : fallback;
 }
 /**
  * Make sure a Pokémon's sprite is cached. One request is shared by every caller.
@@ -2224,7 +2409,7 @@ async function pickSprite(roster, token) {
   for (const x of order.slice(0, SPRITE_TRIES)) {
     if (x.model) { img.dataset.live = x.src; img.dataset.still = ''; applySpriteMotion(); markSprite(x); return x; }
     const icon = x.sh && spriteSet === 'auto' ? shadowIcon(x.m) : '', render = icon && await loadable(icon) ? icon : '';
-    const own = await ensureSprite(x.m), moving = /\.gif$/i.test(own);
+    const own = await autoSprite(x.m, await ensureSprite(x.m)), moving = /\.gif$/i.test(own);
     if (token !== dexToken) { return null; }
     const src = render && !moving ? render : own;
     if (src && (src === render || await loadable(src))) {
@@ -2249,7 +2434,7 @@ function decodes(src) {
   return Promise.race([i.decode().then(() => true, () => false), wait]);
 }
 /**
- * Show another caught Pokémon, or a 3D model while none is marked as caught, using only sprites already in the cache and the models kept in the page. Nothing is looked up or fetched for the choice. If no other sprite exists, nothing changes.
+ * Show another caught Pokémon, or a 3D model while none is marked as caught, using the sprites already in the cache and the models kept in the page. With Automatic, the animated versions that exist for the chosen Pokémon are looked up once, and one is picked at random. If no other sprite exists, nothing changes.
  * @param {{roster: {list: object[]}, token: number}} ctx The home visit.
  * @returns {Promise<object|null>} The entry now shown, or null if nothing changed.
  */
@@ -2267,10 +2452,13 @@ async function showCachedSprite(ctx) {
   const others = pool.filter((x) => spriteId(x) !== spriteLast);
   for (let i = others.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [others[i], others[j]] = [others[j], others[i]]; }
   for (const x of others.slice(0, SPRITE_TRIES)) {
-    const ok = await decodes(x.src);
+    const src = x.m && !x.model ? await autoSprite(x.m, x.src) : x.src;
+    if (ctx.token !== dexToken) { return null; }
+    const ok = await decodes(src);
     if (ctx.token !== dexToken) { return null; }
     if (!ok) { continue; }
-    img.dataset.live = x.src; img.dataset.still = /\.gif$/i.test(x.src) ? spriteStill(x.m) : ''; applySpriteMotion();
+    x.src = src;
+    img.dataset.live = src; img.dataset.still = /\.gif$/i.test(src) ? spriteStill(x.m) : ''; applySpriteMotion();
     markSprite(x);
     return x;
   }
@@ -2483,8 +2671,8 @@ function loadGo() {
  */
 function matchups(types, chart) {
   if (!chart) { return { weak: [], resist: [], mult: {}, top: [] }; }
-  const hits = TYPES.map((a) => [a, Math.round(types.reduce((p, d) => p * (chart[a] && chart[a][d] !== undefined ? chart[a][d] : NEUTRAL), NEUTRAL) * 100) / 100]);
-  const weakHits = hits.filter(([, v]) => v > NEUTRAL), most = weakHits.reduce((m, [, v]) => Math.max(m, v), 0);
+  const hits = TYPES.map((a) => [a, Math.round(types.reduce((p, d) => p * (chart[a] && chart[a][d] !== undefined ? chart[a][d] : NEUTRAL), NEUTRAL) * HUNDREDTHS) / HUNDREDTHS]);
+  const weakHits = hits.filter(([, v]) => v > NEUTRAL);
   return { weak: weakHits.map(([a]) => a), resist: hits.filter(([, v]) => v < NEUTRAL).map(([a]) => a), mult: Object.fromEntries(weakHits), top: weakHits.filter(([, v]) => v > SUPER_EFFECTIVE).map(([a]) => a) };
 }
 /**
@@ -3313,8 +3501,8 @@ async function addRocketRecs(entries, rocket) {
  */
 function parseRoute() {
   const h = location.hash;
-  if (!h.startsWith('#/')) { return { name: 'home' }; }
-  const parts = h.slice(2).split('/').filter(Boolean).map((p) => { try { return decodeURIComponent(p); } catch { return p; } });
+  if (!h.startsWith(HASH_PREFIX)) { return { name: 'home' }; }
+  const parts = h.slice(HASH_PREFIX.length).split('/').filter(Boolean).map((p) => { try { return decodeURIComponent(p); } catch { return p; } });
   const page = (s) => { const n = parseInt(s, 10); return Number.isFinite(n) && n > 0 ? n : 1; };
   const [head, arg1, arg2, arg3] = parts;
   switch (head) {
@@ -3516,4 +3704,4 @@ if ('ResizeObserver' in window) { new ResizeObserver(() => document.documentElem
 show(false);
         </script>
     </body>
-</html
+</html>

@@ -627,6 +627,8 @@ button.tile--sprite[aria-busy="true"] { cursor: progress; }
 .is-home .tile li { line-height: 1.25; }
 .is-home .tile--top li { flex-wrap: wrap; align-content: center; }
 .is-home .tile--top .tile__name { overflow-wrap: normal; }
+/* Rows with a face: the name takes the space beside the face and wraps inside its own box, so a long name such as Shadow Zekrom stays level with its picture instead of dropping under it. */
+.is-home .tile--top li:has(.tile__face) .tile__name { flex: 1 1 0; min-inline-size: 0; overflow-wrap: break-word; }
 /* DPS and Score always take their own line under the name, so every row looks the same. The tighter line height and sub-line size keep two or three lines per row inside the screen, so the home page does not scroll. */
 .is-home .tile--top li { line-height: 1.15; }
 .is-home .tile--top .tile__sub { flex: 0 0 100%; font-size: min(1em, var(--t-sm)); }

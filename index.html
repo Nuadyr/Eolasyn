@@ -492,6 +492,8 @@ span.rocket-logo { position: absolute; inset-block-start: 0; inset-inline-end: 0
 .tile__name { font-weight: 700; }
 .tile__sub { color: var(--ink-soft); font-size: var(--t-sm); }
 .tile__moves { display: none; flex-basis: 100%; }
+.is-home .tile--top li:has(.tile__face) { align-items: center; }
+.tile__face { flex: 0 0 auto; inline-size: clamp(1.75rem, 4.5dvh, 2.5rem); block-size: clamp(1.75rem, 4.5dvh, 2.5rem); object-fit: contain; }
 @media (width >= 40rem) { .tile__moves { display: block; } }
 /* The sprite card: square, the sprite fills it, no heading or text. It is a button: pressing it shows another caught Pokémon from the sprite cache. */
 .tile--sprite { aspect-ratio: 1; padding: var(--s-2); place-items: stretch; align-content: stretch; overflow: hidden; }
@@ -1545,6 +1547,19 @@ function viewHome() {
 }
 const homeFail = (id, link) => { const b = $(id); if (b) { b.innerHTML = '<p class="tile__sub">Could not load. <a href="' + link + '">Open the full list</a>.</p>'; } };
 const homeList = (id, items) => { const b = $(id); if (b) { b.innerHTML = '<ol>' + items.join('') + '</ol>'; } };
+const TOP_FACE_KINDS = ['g8la'].concat(GAME_FALLBACK); // The picture styles tried for the face beside a Top 5 entry: the Legends: Arceus menu icon, then the usual fallbacks.
+/**
+ * The face picture for a Top 5 entry: the regular (not shiny) Legends: Arceus menu icon, or the next style that has one for this form. None when the device asks for less data.
+ * @param {{id: number, name: string, form: string, key: string}|undefined} m The roster row.
+ * @returns {Promise<string>} A picture address, or an empty string.
+ */
+async function topFace(m) {
+  if (!m || lowData()) { return ''; }
+  for (const kind of TOP_FACE_KINDS) {
+    try { const u = await spriteOfKind(kind, m); if (u) { return u; } } catch { /* try the next style */ }
+  }
+  return '';
+}
 /**
  * Fill a top 5 tile from the Pokémon you marked as caught only. Fewer than five are shown if fewer are caught.
  * @param {string} id The tile body id.
@@ -1557,7 +1572,12 @@ async function fillTop(id, plpId, token) {
   try {
     const { rows } = await dexRows(PLPS.find((x) => x.id === plpId), { force: true });
     if (token !== dexToken) { return; }
-    homeList(id, rows.slice(0, RECS_MAX).map((e) => '<li><span class="tile__name">' + esc(e.mon) + '</span><span class="tile__sub">' + esc(e.stats[0] ? (e.stats[0].l === 'Defender score' ? 'Score' : e.stats[0].l) + ' ' + e.stats[0].v : '') + '</span><span class="tile__sub tile__moves">' + esc(e.moves) + '</span></li>'));
+    const top = rows.slice(0, RECS_MAX), roster = await getRoster(), byKey = new Map(roster.list.map((m) => [m.key, m])), faces = await Promise.all(top.map((e) => topFace(byKey.get(e.key))));
+    if (token !== dexToken) { return; }
+    homeList(id, top.map((e, n) => {
+      const stat = e.stats[0] ? (e.stats[0].l === 'Defender score' ? 'Score' : e.stats[0].l) + ' ' + e.stats[0].v : '';
+      return '<li>' + (faces[n] ? '<img class="tile__face" src="' + faces[n] + '" width="40" height="40" alt="" loading="lazy">' : '') + '<span class="tile__name">' + esc(e.mon) + '</span> <span class="' + (faces[n] ? 'vh' : 'tile__sub') + '">' + esc(stat) + '</span><span class="tile__sub tile__moves">' + esc(e.moves) + '</span></li>';
+    }));
   } catch { if (token === dexToken) { homeFail(id, hash('list', plpId)); } }
 }
 /**

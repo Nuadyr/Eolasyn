@@ -207,7 +207,13 @@ code { font-family: var(--font-mono); font-size: inherit; background: var(--surf
 img, svg { max-inline-size: 100%; }
 [hidden] { display: none !important; }
 
-:focus-visible { outline: 0.25rem solid var(--focus); outline-offset: 0.125rem; border-radius: var(--r-1); }
+:focus-visible { outline: 0.25rem solid var(--focus); outline-offset: 0.125rem; border-radius: var(--r-1); box-shadow: 0 0 0 0.125rem var(--surface); }
+/* The shadow fills the gap between an element and its outline with the page surface, so the ring stays visible whatever the element's own border or background is. */
+/* The footer is always dark, so its ring uses the light footer colour instead of the focus colour, which is dark in the light theme. */
+.site-footer :focus-visible { outline-color: var(--on-brand); box-shadow: 0 0 0 0.125rem var(--brand); }
+/* The sprite tile has a border and clips its contents, so its ring sits inside the border where nothing can cover it. */
+.tile--sprite:focus-visible { outline-offset: -0.25rem; box-shadow: inset 0 0 0 0.5rem var(--surface); border-radius: var(--r-3); }
+@media (forced-colors: active) { :focus-visible { outline-color: Highlight; box-shadow: none; } }
 h1:focus, h2:focus, main:focus { outline: none; }
 h1:focus-visible, h2:focus-visible { outline: 0.25rem solid var(--focus); outline-offset: 0.25rem; }
 

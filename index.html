@@ -353,6 +353,9 @@ dialog { overscroll-behavior: contain; }
 .tabs a { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 0.125rem; min-block-size: 3.5rem; padding: var(--s-2); font-size: var(--t-sm); font-weight: 700; line-height: 1.2; text-align: center; text-decoration: none; color: var(--ink-soft); background: transparent; border: var(--rule) solid transparent; border-radius: 1.25rem; }
 .tabs a::before { content: ""; inline-size: 1.5rem; block-size: 1.5rem; flex: none; background: currentColor; mask: var(--nav-icon) center / contain no-repeat; -webkit-mask: var(--nav-icon) center / contain no-repeat; }
 .tabs a:hover { color: var(--ink); background: var(--surface); }
+/* Focus ring for the navigation pills. It sits inside the pill, so neighbouring pills and the track border never hide it. Two tones (the focus colour outside, the page surface inside) keep it visible on the filled current pill and on the track alike. */
+.tabs a:focus-visible { outline: 0.25rem solid var(--focus); outline-offset: -0.25rem; border-radius: 1.25rem; box-shadow: inset 0 0 0 0.5rem var(--surface); }
+@media (forced-colors: active) { .tabs a:focus-visible { outline-color: Highlight; box-shadow: none; } }
 .tabs a[aria-current="page"] { color: var(--on-action); background: var(--action); text-decoration: underline; text-decoration-thickness: 0.125rem; text-underline-offset: 0.25em; }
 .tabs a[aria-current="page"]:hover { background: var(--action-hover); }
 @media (prefers-reduced-motion: no-preference) { .tabs a { transition: background-color 0.18s ease, color 0.18s ease; } }
@@ -951,6 +954,8 @@ const MD5_SHIFTS = [7, 12, 17, 22, 5, 9, 14, 20, 4, 11, 16, 23, 6, 10, 15, 21]; 
 const HUNDREDTHS = 100; // Multiplier that rounds a matchup to two decimal places.
 const HASH_PREFIX = '#/'; // How every page address in the hash starts.
 const MD5_BASE = 2; // Base of the powers of two used by MD5.
+const MD5_INIT_B = 0xefcdab89; // MD5 starting value of the second state word, from the MD5 specification.
+const MD5_INIT_C = 0x98badcfe; // MD5 starting value of the third state word, from the MD5 specification.
 const MD5_LENGTH_BYTES = 8; // Bytes holding the message length at the end of a padded MD5 message.
 const MD5_ROUND_H = 2; // The index of the MD5 round that uses the XOR function.
 const MD5_G_MUL = [1, 5, 3, 7]; // Per round, the factor in the word index: (factor * step + offset) mod 16.
@@ -1048,7 +1053,7 @@ function archiveDir(file) {
   bytes.push(MD5_BASE ** (BITS_PER_BYTE - 1));
   while (bytes.length % MD5_BLOCK !== MD5_PAD_AT) { bytes.push(0); }
   for (let i = 0; i < MD5_LENGTH_BYTES; i++) { bytes.push(i < MD5_WORD ? (bits >>> (BITS_PER_BYTE * i)) & BYTE_MASK : 0); }
-  let a0 = 0x67452301, b0 = 0xefcdab89 | 0, c0 = 0x98badcfe | 0, d0 = 0x10325476;
+  let a0 = 0x67452301, b0 = MD5_INIT_B | 0, c0 = MD5_INIT_C | 0, d0 = 0x10325476;
   for (let off = 0; off < bytes.length; off += MD5_BLOCK) {
     const w = Array.from({ length: MD5_WORDS }, (_, i) => { const o = off + MD5_WORD * i; let v = 0; for (let j = 0; j < MD5_WORD; j++) { v |= bytes[o + j] << (BITS_PER_BYTE * j); } return v; });
     let a = a0, b = b0, c = c0, d = d0;
@@ -1631,7 +1636,19 @@ function toggleRocketInfo(b) {
     ? '<h3 class="vh">' + esc(homeGiovanni.name) + ' full team</h3><ol class="rocket-team">' + homeGiovanni.slots.map((slot, i) => '<li><span class="tile__sub">' + (homeGiovanni.slots.length > 1 ? 'Slot ' + (i + 1) : 'Lineup') + (slot.length > 1 ? ' (one of):' : ':') + '</span>' + (slot.length > 1 ? '<ul>' + slot.map((x) => '<li>' + mon(x) + '</li>').join('') + '</ul>' : ' ' + mon(slot[0])) + '</li>').join('') + '</ol>'
     : '';
 }
-const HOME_RAID_TYPES = ['Tier 5', 'Shadow Tier 5', 'Shadow Tier 3', 'Mega']; // Raid types shown on the home page, top boss of each.
+const TIER_MEGA = 6; // Mega raids rank above Tier 5.
+const TIER_UNNUMBERED = 5; // Raid types with no number (for example Ultra Beast) rank as Tier 5.
+const TIER_STEP = 2; // Room between tiers so a normal raid ranks one above a Shadow raid of the same tier.
+const HOME_RAID_MAX = 4; // Most raid types shown on the home page (the grid is two by two), top boss of each. Which types appear comes from the raid feed.
+/**
+ * How prominent a raid type is, for choosing which types get a home slot: Mega first, then higher tiers, with a normal raid ahead of a Shadow raid of the same tier. Types with no number (for example Ultra Beast) rank as Tier 5.
+ * @param {string} t The tier label, for example "Shadow Tier 5".
+ * @returns {number} Higher is more prominent.
+ */
+function tierRank(t) {
+  const n = /(\d+)$/.exec(t), base = /mega/i.test(t) ? TIER_MEGA : n ? Number(n[1]) : TIER_UNNUMBERED;
+  return base * TIER_STEP + (/^shadow/i.test(t) ? 0 : 1);
+}
 const RAID_KIND = 'gen6'; // The picture style raid bosses try first, whatever style is chosen in Settings: the Generation 6 animated sprites, with no Generation 5 fallback.
 let homeRaids = [], homeGiovanni = null;
 /**
@@ -1703,8 +1720,9 @@ async function fillRaids(token) {
     const [raids, roster] = await Promise.all([getRaids(), getRoster()]);
     const box = $('home-raids');
     if (token !== dexToken || !box) { return; }
-    homeRaids = HOME_RAID_TYPES.map((t) => raids.list.find((b) => b.tier === t)).filter(Boolean);
-    if (!homeRaids.length) { box.innerHTML = '<p class="tile__sub">No Tier 5, Shadow or Mega raid bosses right now.</p>'; return; }
+    const seen = new Set();
+    homeRaids = raids.list.filter((b) => !seen.has(b.tier) && seen.add(b.tier)).sort((a, b) => tierRank(b.tier) - tierRank(a.tier)).slice(0, HOME_RAID_MAX);
+    if (!homeRaids.length) { box.innerHTML = '<p class="tile__sub">No raid bosses right now.</p>'; return; }
     box.innerHTML = '<ul class="raid-grid">' + homeRaids.map((b, i) => '<li><button type="button" data-a="raid-info" data-i="' + i + '" aria-expanded="false" aria-controls="home-raid-info"><span class="raid__title">' + esc(b.tier) + '</span><span class="raid__box"><span class="raid__img"><img id="home-raid-img-' + i + '" width="96" height="96" alt=""></span></span></button></li>').join('') + '</ul><p id="home-raid-info" role="status" class="tile__sub"></p>';
     homeRaids.forEach(async (b, i) => {
       const src = await raidSprite(b, roster), img = $('home-raid-img-' + i);

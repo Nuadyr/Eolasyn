@@ -37,7 +37,7 @@
         <link
             rel="icon"
             type="image/svg+xml"
-            href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231a1a1d'/%3E%3Cpath d='M8 24V8l8 9 8-9v16' fill='none' stroke='%239999cc' stroke-width='3' stroke-linejoin='round'/%3E%3C/svg%3E"
+            href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='6'%20fill='%231a1a1d'/%3E%3Cpath%20d='M8%2024V8l8%209%208-9v16'%20fill='none'%20stroke='%239999cc'%20stroke-width='3'%20stroke-linejoin='round'/%3E%3C/svg%3E"
         >
         <meta property="og:type" content="website">
         <meta property="og:site_name" content="Eolasyn">
@@ -151,7 +151,8 @@
 
   --s-1: 0.25rem; --s-2: 0.5rem; --s-3: 0.75rem; --s-4: 1rem; --s-5: 1.5rem; --s-6: 2rem; --s-7: 3rem; --s-8: 4rem;
   --r-1: 0.25rem; --r-2: 0.5rem; --r-3: 0.875rem;
-  --t-sm:   clamp(0.875rem, 0.84rem + 0.15vw, 0.9375rem);
+  --t-min:  1rem; /* 12pt, smallest permitted text size */
+  --t-sm:   var(--t-min);
   --t-base: clamp(1rem, 0.95rem + 0.2vw, 1.0625rem);
   --t-md:   clamp(1.125rem, 1.04rem + 0.4vw, 1.3125rem);
   --t-lg:   clamp(1.375rem, 1.18rem + 0.85vw, 1.75rem);
@@ -202,7 +203,7 @@ strong, b, th, legend, .tile__name, .moves, .stat__value { color: var(--heading)
 p + p { margin-block-start: var(--s-3); }
 a { color: var(--link); text-decoration-thickness: 0.09em; text-underline-offset: 0.18em; }
 a:hover { text-decoration-thickness: 0.18em; }
-code { font-family: var(--font-mono); font-size: 0.9em; background: var(--surface-2); padding: 0 0.25em; border-radius: var(--r-1); }
+code { font-family: var(--font-mono); font-size: inherit; background: var(--surface-2); padding: 0 0.25em; border-radius: var(--r-1); }
 img, svg { max-inline-size: 100%; }
 [hidden] { display: none !important; }
 
@@ -604,7 +605,7 @@ button.tile--sprite[aria-busy="true"] { cursor: progress; }
 .is-home #home-raids { min-block-size: 0; display: grid; grid-template-rows: minmax(0, 1fr); }
 .is-home .raid-grid { min-block-size: 0; grid-template-rows: repeat(2, minmax(0, 1fr)); }
 .is-home .raid-grid li { min-block-size: 0; display: grid; }
-.is-home .raid-grid button { align-items: stretch; justify-items: stretch; block-size: 100%; grid-template-rows: auto minmax(0, 1fr); min-block-size: 0; font-size: clamp(0.6875rem, 1.6dvh, 0.875rem); }
+.is-home .raid-grid button { align-items: stretch; justify-items: stretch; block-size: 100%; grid-template-rows: auto minmax(0, 1fr); min-block-size: 0; font-size: var(--t-min); }
 .is-home .raid__title { align-self: start; overflow-wrap: normal; }
 .is-home .raid-grid button { background: transparent; border-color: transparent; }
 .is-home .raid-grid button:hover, .is-home .raid-grid button[aria-expanded="true"] { background: var(--surface-2); border-color: transparent; }
@@ -616,14 +617,14 @@ button.tile--sprite[aria-busy="true"] { cursor: progress; }
 .is-home .tile--top li { border-block-end: var(--rule) solid var(--line-soft); }
 .is-home .tile--top li:last-child { border-block-end: 0; }
 .is-home .tile--top .tile__part > div > p { align-self: start; }
-.is-home .tile h2 { font-size: clamp(0.7rem, 8.5cqi, 1.5rem); line-height: 1.2; letter-spacing: 0.01em; white-space: nowrap; }
-.is-home .tile--rocket h2 { font-size: clamp(0.7rem, calc((100cqi - var(--logo-size) - 0.5rem) / 6.2), 1.5rem); }
+.is-home .tile h2 { font-size: clamp(var(--t-min), 8.5cqi, 1.5rem); line-height: 1.2; letter-spacing: 0.01em; white-space: nowrap; }
+.is-home .tile--rocket h2 { font-size: clamp(var(--t-min), calc((100cqi - var(--logo-size) - 0.5rem) / 6.2), 1.5rem); }
 .is-home .tile h2 a { white-space: nowrap; gap: 0.125em; overflow-wrap: normal; word-break: normal; color: var(--ink); text-decoration: none; }
 .is-home .tile h2 a::after { content: ""; inline-size: 1em; block-size: 1em; flex: none; background: currentColor; mask: var(--mask-chev) center / contain no-repeat; -webkit-mask: var(--mask-chev) center / contain no-repeat; color: var(--link); }
 .is-home .tile h2 a:hover { color: var(--link); text-decoration: underline; text-decoration-thickness: 0.12em; text-underline-offset: 0.2em; }
 @media (forced-colors: active) { .is-home .tile h2 a::after { forced-color-adjust: none; background-color: LinkText; } }
 .is-home .tile h2 a { min-block-size: 2rem; }
-.is-home .tile ol { font-size: clamp(0.8125rem, 1.9dvh, 1rem); }
+.is-home .tile ol { font-size: var(--t-min); }
 .is-home .tile li { line-height: 1.25; }
 .is-home .tile--top li { flex-wrap: wrap; align-content: center; }
 .is-home .tile--top .tile__name { overflow-wrap: normal; }
@@ -632,7 +633,7 @@ button.tile--sprite[aria-busy="true"] { cursor: progress; }
 /* DPS and Score always take their own line under the name, so every row looks the same. The tighter line height and sub-line size keep two or three lines per row inside the screen, so the home page does not scroll. */
 .is-home .tile--top li { line-height: 1.15; }
 .is-home .tile--top .tile__sub { flex: 0 0 100%; font-size: min(1em, var(--t-sm)); }
-@media (width >= 40rem) { .is-home .tile--top ol { font-size: clamp(0.75rem, 1.6dvh, 1rem); } .is-home .tile--top li { line-height: 1.1; } }
+@media (width >= 40rem) { .is-home .tile--top ol { font-size: var(--t-min); } .is-home .tile--top li { line-height: 1.1; } }
 .is-home .tile__part { --logo-size: clamp(2.25rem, 5.5dvh, 3.5rem); }
 @media (width >= 64rem) { .is-home .tile--sprite { align-self: stretch; } .is-home .tile--raids { align-self: start; max-block-size: 100%; } }
 @media (width < 56rem) {
@@ -2122,7 +2123,8 @@ function toggleShadow(b) {
 }
 
 /* ---------- Home sprite: a random caught Pokémon, cached when it is marked as caught, or one of the 3D models while none is marked ---------- */
-let spriteMem = null, spriteTimer = null, spriteLast = '', spriteSyncing = false, spriteAgain = false, spriteSigNow = '', spriteGen = 0, spriteCtx = null, spriteBusy = false, spriteTapAt = 0;
+const STORE_BAG = 'pgh-sprite-bag'; // Storage key for the sprites already shown in this round of the magic bag.
+let spritePlayed = new Set((() => { const v = store.get(STORE_BAG, []); return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : []; })()), spriteMem = null, spriteTimer = null, spriteLast = '', spriteSyncing = false, spriteAgain = false, spriteSigNow = '', spriteGen = 0, spriteCtx = null, spriteBusy = false, spriteTapAt = 0;
 const spriteReq = new Map();
 const SPRITE_OK = /^(data:image\/(png|gif|webp);base64,|https:\/\/)/;
 const MODEL_KEY_PREFIX = 'model-'; // Starts the pool key of a 3D model, which never matches a Pokémon key.
@@ -2131,6 +2133,21 @@ const MODEL_KEY_PREFIX = 'model-'; // Starts the pool key of a 3D model, which n
  * @returns {{m: {key: string, name: string, id: (number|null)}, sh: boolean, src: string, model: boolean}[]} Pool entries.
  */
 const modelPool = () => (ownedKeys().length ? [] : SPRITES_3D.map((s) => ({ m: { key: MODEL_KEY_PREFIX + s.id, name: s.name, id: s.dex }, sh: false, src: s.src, model: true })));
+/**
+ * The magic bag: the pool in a random order, with the entries not yet shown in this round first. Every entry is shown once before any is shown again. When all have been shown the bag is refilled, and the one shown last goes to the back so it does not come twice in a row.
+ * @param {{m: {key: string}, sh: boolean}[]} pool The entries that can be shown now.
+ * @returns {object[]} The pool in the order to try, which is new to this round first.
+ */
+function bagOrder(pool, canRefill = true) {
+  const ids = new Set(pool.map(spriteId));
+  if (canRefill && pool.length && [...ids].every((id) => spritePlayed.has(id))) { spritePlayed = new Set(); }
+  const shuffled = pool.slice();
+  for (let i = shuffled.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; }
+  const fresh = shuffled.filter((x) => !spritePlayed.has(spriteId(x)));
+  const rest = shuffled.filter((x) => spritePlayed.has(spriteId(x)));
+  const all = fresh.concat(rest);
+  return all.length > 1 ? all.filter((x) => spriteId(x) !== spriteLast).concat(all.filter((x) => spriteId(x) === spriteLast)) : all;
+}
 const FORM_ALIAS = [[/^alola/, 'alola'], [/^galar/, 'galar'], [/^hisui/, 'hisui'], [/^paldea/, 'paldea']]; // GO form names that PokéAPI spells differently.
 /* ---------- Sprite style: the choice in Settings, adjusted for the device ---------- */
 let spriteSet = store.get(STORE_SPRITE_SET, SPRITE_SET_DEFAULT);
@@ -2412,9 +2429,11 @@ function markSprite(x) {
   wrap.hidden = false;
   wrap.setAttribute('aria-label', x.m.name + (x.sh ? ' (Shadow)' : '') + '. Press to show another sprite.');
   spriteLast = spriteId(x);
+  spritePlayed.add(spriteLast);
+  store.set(STORE_BAG, [...spritePlayed]);
 }
 /**
- * Show a random caught Pokémon, Shadow or not, other than the one shown now, or one of the 3D models while none is marked as caught or Shadow, in the sprite style chosen in Settings. It moves when an animated sprite exists. Shadow ones get a purple glow and a visible Shadow label. With Automatic, the Pokémon GO 3D icon stands in for a Shadow Pokémon when there is no animated sprite or motion is reduced.
+ * Show a random caught Pokémon, Shadow or not, drawn from the magic bag (see bagOrder), so none repeats until all have been shown, or one of the 3D models while none is marked as caught or Shadow, in the sprite style chosen in Settings. It moves when an animated sprite exists. Shadow ones get a purple glow and a visible Shadow label. With Automatic, the Pokémon GO 3D icon stands in for a Shadow Pokémon when there is no animated sprite or motion is reduced.
  * @param {{list: object[]}} roster The roster.
  * @param {number} token The visit this belongs to.
  * @returns {Promise<object|null>} The entry now shown, or null if nothing could be shown.
@@ -2426,8 +2445,7 @@ async function pickSprite(roster, token) {
   ownedKeys().forEach((k) => { const m = byKey.get(k); if (!m) { return; } if (caught.has(k)) { pool.push({ m, sh: false }); } if (shadow.has(k)) { pool.push({ m, sh: true }); } });
   pool.push(...modelPool());
   if (!pool.length) { wrap.hidden = true; spriteLast = ''; return null; }
-  for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
-  const order = pool.length > 1 ? pool.filter((x) => spriteId(x) !== spriteLast).concat(pool.filter((x) => spriteId(x) === spriteLast)) : pool;
+  const order = bagOrder(pool);
   for (const x of order.slice(0, SPRITE_TRIES)) {
     if (x.model) { img.dataset.live = x.src; img.dataset.still = ''; applySpriteMotion(); markSprite(x); return x; }
     const icon = x.sh && spriteSet === 'auto' ? shadowIcon(x.m) : '', render = icon && await loadable(icon) ? icon : '';
@@ -2471,8 +2489,9 @@ async function showCachedSprite(ctx) {
     if (shadow.has(k)) { pool.push({ m, sh: true, src }); }
   });
   pool.push(...modelPool());
-  const others = pool.filter((x) => spriteId(x) !== spriteLast);
-  for (let i = others.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [others[i], others[j]] = [others[j], others[i]]; }
+  /* Only some Pokémon have a cached sprite, so this pool is a part of the bag: it never refills the bag. When every cached one has been shown, the ones not cached yet are loaded through pickSprite, which uses the whole bag. */
+  const others = bagOrder(pool, false).filter((x) => spriteId(x) !== spriteLast);
+  if (!others.some((x) => !spritePlayed.has(spriteId(x)))) { return pickSprite(ctx.roster, ctx.token); }
   for (const x of others.slice(0, SPRITE_TRIES)) {
     const src = x.m && !x.model ? await autoSprite(x.m, x.src) : x.src;
     if (ctx.token !== dexToken) { return null; }
